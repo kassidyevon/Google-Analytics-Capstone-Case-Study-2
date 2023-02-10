@@ -1,0 +1,295 @@
+---
+title: "Capstone Case Study #2 - Bellabeat"
+author: "Kassidy Evon Jones"
+date: "2023-02-09"
+output: html_document
+---
+
+The case study follows the six-step data analysis process:
+
+1.  Ask
+2.  Prepare
+3.  Process
+4.  Analyze
+5.  Share
+6.  Act
+
+## Introduction
+
+Bellabeat, founded in 2013, is a tech manufacturing company specializing in health-focused smart products for women. The main products are - Bellabeat app provides health-related data such as activity, sleep, stress, menstrual cycle, and mindfulness habits; Leaf, is a wellness tracker worn as a bracelet, neckless, or clip that sends activity to the Bellabeat app; time, smartwatch that sends activity to the Bellabeat app; and Spring, a water bottle capturing hydration and sends activity to the Bellabeat app.
+
+------------------------------------------------------------------------
+## Stage 1 - Ask
+
+As the company is looking to increase market share the ask is to analyze smart device usage data to gain new insights into how customers use smart devices to unlock new growth opportunities that could influence the marketing strategy for Bellabeat.
+
+The key stakeholders are-
+
+-   Urska Srsen, co-founder and Chief Creative Officer
+-   Sando Mur, co-founder and key member of Bellbeat executive team
+-   Bellabeat marketing analytics team
+
+We can leverage smart device information and the functionality of Bellabeat products to understand the following hypotheses-
+
+-   Smart devices can provide a correlation between physical activity and calories burned.
+-   Smart devices can provide a correlation between physical activity and sleep.
+-   Smart devices can provide a correlation between physical activity and weight.
+
+
+------------------------------------------------------------------------
+
+## Stage 2 - Prepare
+
+The data used to explore smart device trends is Fitbit Fitness Tracker provided by Mobius under the CC0, public domain licenses in Kaggle. The data contains daily activity of thirty (30) Fitbit users' minute-level output for physical activity, heart rate, weight, and sleep monitoring between March 12, 2016 -- May 12, 2026.
+
+#### ROCCC analysis
+
+-   Reliability: LOW -- dataset was collected from 30 individuals without any basic demographics.
+-   Originality: LOW -- third-party data collected using Amazon Mechanical Turk.
+-   Comprehensive: LOW -- dataset contains multiple fields on daily activity intensity, calories used, daily steps taken, daily sleep time and weight record; but missing basic demographics.
+-   Current: MEDIUM -- data is 7 years old, so any new trends added to smart devices will be omitted from the data collected. However, the data can provide a foundational direction of behavior.
+-   Cited: HIGH -- data collector is Amazon Mechanical Turk and the source is well documented.
+
+#### Data Selection
+
+There were several data tables provided, however the focus is on consumption to understand the frequency and type of usage for the devices. The following tables were imported-
+
+-   DailyActivity_Merged
+-   WeightLogInfo_Merged
+-   SleepDay_Merged <!-- Import Data, be sure to import files in upper right corner under 'Import Dataset' as it is the easiest way -->
+
+To prepare for analysis in RStudio; packages, libraries and data files have to be installed and imported.
+
+```{r packages, eval=FALSE, include=FALSE}
+install.packages ("tidyverse")
+install.packages ("reshape2")
+install.packages ("scales")
+install.packages ("dplyr")
+install.packages("lubridate")
+install.packages("plotly")
+install.packages("arsenal", repo="http://cran.r-project.org", dep=T)
+
+
+library(tidyverse) 
+library(reshape2)
+library(scales)
+library(arsenal)
+library (dplyr)
+library (plotly)
+library(lubridate)
+```
+
+------------------------------------------------------------------------
+
+## Stage 3 - Process
+
+The data mentioned data tables were checked for formatting and integrity.
+
+#### Data Cleaning
+
+The following steps were taken to prepare the data for analysis --
+
+-   The date fields in all three datasets were converted to date format only and renamed to Date.
+
+```{r cleaning dates, eval=FALSE, include=FALSE}
+sleepDay_merged$SleepDay <- as.Date(sleepDay_merged$SleepDay)
+sleepday1 <- rename(sleepDay_merged,EntryDate = SleepDay)
+print(sleepday1)
+
+dailyActivity_merged$ActivityDate <- as.Date(dailyActivity_merged$ActivityDate)
+daily_activity<- rename(dailyActivity_merged,EntryDate = ActivityDate)
+print(daily_activity)
+
+weightLogInfo_merged$Date <- as.Date(weightLogInfo_merged$Date)
+weight <- rename(weightLogInfo_merged,EntryDate = Date)
+
+```
+
+-   85 entries were deleted from the dailyActivty_merged data due to NULL values in activity columns and to avoid skewing the data.
+
+```{r Cleaning, eval=FALSE, include=FALSE}
+dim(sleepday1)
+sum(is.na(sleepday1))
+sum(duplicated(sleepday1))
+sleepday2 <- sleepday1[!duplicated(sleepday1), ]
+
+dim(weight)
+sum(is.na(weight))
+sum(duplicated(weight))
+weight1 <- weight[!duplicated(weight), ]
+
+
+dim(daily_activity)
+sum(is.na(daily_activity))
+sum(duplicated(daily_activity))
+daily_activity1 <- daily_activity[!duplicated(daily_activity), ]
+```
+
+-   Combined all data tables to prepare of analysis
+
+```{r merge, eval=FALSE, include=FALSE }
+alldata <- daily_activity1 %>% left_join( sleepday2, 
+          by=c('Id' = 'Id', 
+               'EntryDate'='EntryDate')
+          )
+
+alldata1 <- alldata %>% left_join(weight1,
+             by=c('Id' = 'Id', 
+                  'EntryDate'='EntryDate')
+)
+alldata1$WeekDay <- wday(alldata1$EntryDate, label=TRUE,abbr=FALSE)
+```
+
+Leveraging the cleaned data, its time to analyze the data!
+
+------------------------------------------------------------------------
+
+## Stage 4 - Analyze
+
+Before diving into answering the hypotheses, there are three questions we considered to validate the hypotheses.
+
+1.  Is there a relationship between the two variables?
+2.  Is the relationship between the two variables statistically significant?
+3.  If the relationship is statistically significant, is it of any use to Bellabeat in practical terms?
+
+The basic summary of the data were performed to check for consistencies.
+
+-   The average steps taken daily is 8,319 and the max was 36,019 (almost 4xs the average).
+-   The average time spent on physical activity was 30mins very active, 15mins fairly active, 210mins (3.5hrs) lightly active; and 955mins (16hrs) sedentary.
+-   The average amount of calories burned within a day is 2,361.
+-   The average time spent sleeping is 419mins (7hrs) vs. in bed 458mins (7.5hrs).
+-   The average BMI is 25 and weight is 158lbs.
+-   Most active days for users are Tuesday, Wednesday, Thursday and Friday.
+
+```{r summary, echo=FALSE}
+alldata1 %>% 
+  dplyr::select( 
+        TotalSteps,
+         TotalDistance,
+         VeryActiveMinutes,
+         FairlyActiveMinutes,
+         LightlyActiveMinutes,
+         SedentaryMinutes,
+         Calories,
+         TotalMinutesAsleep,
+         TotalTimeInBed,
+         WeightPounds,
+         BMI,
+        WeekDay) %>%
+  summary()
+```
+
+-   Most active days for users are Tuesday, Wednesday, Thursday and Saturday.
+
+```{r weekday, echo=FALSE}
+ggplot(data=alldata1, aes(x=WeekDay, y=TotalSteps, fill=WeekDay))+ 
+    geom_point()+ 
+  labs(title="Activity by Weekdays")+
+   geom_bar(stat="identity")+
+    ylab("Total Steps")
+  
+```
+
+#### Hypothesis 1 - Physical Activity vs. Calories Insights
+
+-   Most users spent 79% of their daily activity sitting and 2% were very active.
+
+```{r pie activity}
+total_minutes <- sum(alldata1$VeryActiveMinutes,alldata1$FairlyActiveMinutes, alldata1$LightlyActiveMinutes,alldata1$SedentaryMinutes)
+sedentary_percentage <- sum(alldata1$SedentaryMinutes) / total_minutes*100
+lightly_percentage <- sum(alldata1$LightlyActiveMinutes) / total_minutes*100
+fairly_percentage <- sum(alldata1$FairlyActiveMinutes) / total_minutes*100
+active_percentage <- sum(alldata1$VeryActiveMinutes) / total_minutes*100
+    
+percentage <- data.frame(level=c("Sedentary", "Lightly", "Fairly", "Very Active"),
+                  minutes=c(sedentary_percentage,lightly_percentage,fairly_percentage,active_percentage))
+
+plot_ly(percentage, labels = ~level, values = ~minutes, type = 'pie',textposition = 'outside',textinfo = 'label+percent') %>%
+  layout(title = 'Total Activity Level(mins)',
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+```
+
+-   There is a positive linear relationship between daily steps taken vs. calories burned. The more steps taken in a day; the more calories burned.
+
+```{r steps vs. calories}
+ggplot(data=alldata1, aes(x=TotalSteps, y = Calories, color=SedentaryMinutes))+ 
+  geom_point()+ labs(title = 'Total Activity by Calories')+
+  stat_smooth(method=lm)+
+  scale_color_gradient(low="red", high="yellow")
+
+```
+
+-   In total, the null hypothesis is rejected at a 5% confidence level since the p-value is 2.2e-16, which is closer to 0 and makes the correlation statistically significant.
+-   Further analysis into sedentary minutes, the null hypothesis is rejected at a 5% confidence level as since the p-value is 0.36.
+
+```{r p value}
+step_vs_calories.mod <- lm(Calories~ TotalSteps, data = alldata1)
+summary(step_vs_calories.mod)
+
+sedentary_vs_calories.mod <- lm(Calories~ SedentaryMinutes, data = alldata1)
+summary(sedentary_vs_calories.mod)
+```
+
+-   Bellabeat can leverage this insight by marketing the benefits of Time (the smartwatch) and increasing Bellabeat app downloads to encourage users to track movement and calories to monitor wellness.
+
+#### Hypothesis 2 - Physical Activity vs. Sleep Insights
+
+-   There appears to be a negative linear relationship between daily steps taken vs. minutes asleep. The more steps taken in a day; could correlate to the minutes sleep.
+
+```{r steps vs. sleep}
+ggplot(data=alldata1, aes(x=TotalSteps, y = TotalMinutesAsleep, color=SedentaryMinutes))+ 
+  geom_point()+ labs(title = 'Total Activity by Sleep')+
+  stat_smooth(method=lm)+
+  scale_color_gradient(low="red", high="yellow")
+
+```
+
+-   The null hypothesis is rejected at a 5% confidence level since the p-value is 0.0001054, which is closer to 0 and makes the correlation statistically significant.
+-   Further analysis into sedentary minutes, the null hypothesis still gets rejected as the p-value is 2.2e-16.
+
+```{r p value}
+step_vs_sleep.mod <- lm(TotalMinutesAsleep~ TotalSteps, data = alldata1)
+summary(step_vs_sleep.mod)
+
+sedentary_vs_sleep.mod <- lm(TotalMinutesAsleep~ SedentaryMinutes, data = alldata1)
+summary(sedentary_vs_sleep.mod)
+```
+
+#### Hypothesis 3 - Physical Activity vs. Weight Insights
+
+-   The relationship between daily steps taken vs. weight in inconclusive to due to limited data points.
+
+```{r steps vs. weight}
+ggplot(data=alldata1, aes(x=TotalSteps, y = WeightPounds, color=SedentaryMinutes))+ 
+  geom_point()+ labs(title = 'Total Activity by Weight')+
+  stat_smooth(method=lm)+
+  scale_color_gradient(low="red", high="yellow")
+
+```
+
+-   The null hypothesis is rejected at a 5% confidence level since the p-value is 0.01773, which is closer to 0 and makes the correlation statistically significant.
+-   Further analysis into sedentary minutes, the null hypothesis still gets rejected as the p-value is 0.01868.
+
+```{r p value}
+step_vs_weight.mod <- lm(WeightPounds~ TotalSteps, data = alldata1)
+summary(step_vs_weight.mod)
+
+sedentary_vs_weight.mod <- lm(BMI~ SedentaryMinutes, data = alldata1)
+summary(sedentary_vs_weight.mod)
+```
+
+-   More data is needed to conclude the relationship between activity and weight.
+
+## Stage 5 - Share
+
+We chose to leverage R markdown to highlight the different phases of the analytics process. The html knit for all the findings can be found by clicking on the link -
+
+## Stage 6 - Act
+
+After deep dive analysis with the FitBit user data, the following recommendations-
+
+-   There is a statistically significant correlation between physical activity, weight and sleep. The Marketing team can leverage these insights to improve downloads of the Bellabeat app to help users monitor their activities and get users moving and avoid sitting so much.
+-   Due to limited data for sleep and weight, indicates users do not leverage smart devices for such monitoring. The Marketing team can create a campaign around monitoring quality sleep if they use the Leaf product.
+-   Additionally, if the Leaf products are made to be more "stylish", it would improve the wear times especially during the evenings and weekends.
